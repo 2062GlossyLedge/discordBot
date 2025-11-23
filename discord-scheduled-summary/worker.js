@@ -7,25 +7,25 @@
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    
+
     // Health check endpoint
     if (url.pathname === '/health') {
       return new Response('OK', { status: 200 });
     }
-    
+
     // Get or create the Durable Object instance
     const id = env.DISCORD_BOT.idFromName('main-bot');
     const stub = env.DISCORD_BOT.get(id);
-    
+
     // Route requests to the Durable Object
     if (url.pathname === '/start') {
       return stub.fetch(request);
     }
-    
+
     if (url.pathname === '/status') {
       return stub.fetch(request);
     }
-    
+
     return new Response('Discord Summary Bot - Endpoints: /start, /status, /health', {
       status: 200,
     });
@@ -48,12 +48,12 @@ export class DiscordBot {
 
   async fetch(request) {
     const url = new URL(request.url);
-    
+
     if (url.pathname === '/start') {
       await this.connectToGateway();
       return new Response('Bot started', { status: 200 });
     }
-    
+
     if (url.pathname === '/status') {
       const status = {
         connected: this.ws !== null,
@@ -64,7 +64,7 @@ export class DiscordBot {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    
+
     return new Response('Unknown endpoint', { status: 404 });
   }
 
@@ -88,13 +88,13 @@ export class DiscordBot {
           Authorization: `Bot ${this.env.DISCORD_TOKEN}`,
         },
       });
-      
+
       const gatewayData = await gatewayResponse.json();
       const gatewayUrl = gatewayData.url;
 
       // Connect to WebSocket
       this.ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
-      
+
       this.ws.addEventListener('open', () => {
         console.log('WebSocket connection opened');
         this.reconnectAttempts = 0; // Reset on successful connection
@@ -108,12 +108,12 @@ export class DiscordBot {
       this.ws.addEventListener('close', (event) => {
         console.log('WebSocket closed:', event.code, event.reason);
         this.cleanup();
-        
+
         // Exponential backoff: 5s, 10s, 20s, 40s, 60s (max)
         this.reconnectAttempts++;
         const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
         console.log(`Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})`);
-        
+
         this.reconnectTimeout = setTimeout(() => this.connectToGateway(), delay);
       });
 
@@ -125,12 +125,12 @@ export class DiscordBot {
     } catch (error) {
       console.error('Failed to connect to Gateway:', error);
       this.isConnecting = false;
-      
+
       // Exponential backoff for fetch errors too
       this.reconnectAttempts++;
       const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
       console.log(`Retrying in ${delay / 1000}s (attempt ${this.reconnectAttempts})`);
-      
+
       this.reconnectTimeout = setTimeout(() => this.connectToGateway(), delay);
     }
   }
@@ -147,7 +147,7 @@ export class DiscordBot {
       case 10: // Hello
         this.startHeartbeat(d.heartbeat_interval);
         await this.identify();
-        
+
         // Set up alarm for scheduled summary
         await this.scheduleNextSummary();
         break;
@@ -253,12 +253,12 @@ export class DiscordBot {
 
   async scheduleNextSummary() {
     const summaryHour = parseInt(this.env.SUMMARY_TIME_HOUR) || 9;
-    
+
     // Calculate next alarm time (next occurrence of the configured hour)
     const now = new Date();
     const next = new Date();
     next.setUTCHours(summaryHour, 0, 0, 0);
-    
+
     if (next <= now) {
       next.setUTCDate(next.getUTCDate() + 1);
     }
@@ -270,7 +270,7 @@ export class DiscordBot {
   async alarm() {
     console.log('Alarm triggered - sending summary');
     await this.sendSummary();
-    
+
     // Schedule next alarm
     await this.scheduleNextSummary();
   }
@@ -279,7 +279,7 @@ export class DiscordBot {
     try {
       // Load messages from storage
       this.messageStore = (await this.state.storage.get('messages')) || [];
-      
+
       const intervalHours = parseInt(this.env.SUMMARY_INTERVAL);
       const now = Date.now();
       const intervalMs = intervalHours * 60 * 60 * 1000;
