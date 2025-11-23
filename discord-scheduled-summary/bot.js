@@ -19,7 +19,7 @@ client.once(Events.ClientReady, (c) => {
   console.log(`✅ Bot logged in as ${c.user.tag}`);
   console.log(`📊 Monitoring channel: ${process.env.CHANNEL_ID}`);
   console.log(`👤 Sending summaries to user: ${process.env.USER_ID}`);
-  
+
   // Start the scheduler
   startScheduler(client);
 });
@@ -52,7 +52,7 @@ client.on(Events.MessageCreate, (message) => {
   // Keep only messages from the last configured interval
   const intervalMs = parseInt(process.env.SUMMARY_INTERVAL) * 60 * 60 * 1000;
   const cutoffTime = Date.now() - intervalMs;
-  
+
   // Remove old messages
   while (messageStore.length > 0 && messageStore[0].timestamp < cutoffTime) {
     messageStore.shift();

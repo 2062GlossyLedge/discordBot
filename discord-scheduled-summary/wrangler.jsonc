@@ -1,0 +1,5 @@
+{
+    "name": "scheduled-summary-worker",
+    "compatibility_date": "2025-11-23",
+    "main": "worker.js"
+}

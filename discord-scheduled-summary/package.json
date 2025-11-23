@@ -9,7 +9,12 @@
     "dev": "nodemon bot.js",
     "deploy": "wrangler deploy"
   },
-  "keywords": ["discord", "bot", "scheduled", "summary"],
+  "keywords": [
+    "discord",
+    "bot",
+    "scheduled",
+    "summary"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -19,6 +24,6 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
-    "wrangler": "^3.22.0"
+    "wrangler": "^4.50.0"
   }
 }
