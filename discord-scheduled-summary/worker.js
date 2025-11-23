@@ -22,11 +22,15 @@ export default {
       return stub.fetch(request);
     }
 
+    if (url.pathname === '/stop') {
+      return stub.fetch(request);
+    }
+
     if (url.pathname === '/status') {
       return stub.fetch(request);
     }
 
-    return new Response('Discord Summary Bot - Endpoints: /start, /status, /health', {
+    return new Response('Discord Summary Bot - Endpoints: /start, /stop, /status, /health', {
       status: 200,
     });
   },
@@ -44,18 +48,35 @@ export class DiscordBot {
     this.reconnectAttempts = 0;
     this.isConnecting = false;
     this.reconnectTimeout = null;
+    this.botEnabled = false;
+    this.keepAliveAlarm = null;
   }
 
   async fetch(request) {
     const url = new URL(request.url);
 
     if (url.pathname === '/start') {
+      this.botEnabled = true;
+      await this.state.storage.put('botEnabled', true);
       await this.connectToGateway();
+      await this.scheduleKeepAlive();
       return new Response('Bot started', { status: 200 });
+    }
+
+    if (url.pathname === '/stop') {
+      this.botEnabled = false;
+      await this.state.storage.put('botEnabled', false);
+      this.cleanup();
+      if (this.keepAliveAlarm) {
+        await this.state.storage.deleteAlarm();
+        this.keepAliveAlarm = null;
+      }
+      return new Response('Bot stopped', { status: 200 });
     }
 
     if (url.pathname === '/status') {
       const status = {
+        enabled: this.botEnabled,
         connected: this.ws !== null && this.ws.readyState === WebSocket.OPEN,
         wsReadyState: this.ws ? this.ws.readyState : null,
         sessionId: this.sessionId,
@@ -71,8 +92,12 @@ export class DiscordBot {
 
     return new Response('Unknown endpoint', { status: 404 });
   }
-  //connect on Gateway
   async connectToGateway() {
+    if (!this.botEnabled) {
+      console.log('Bot is disabled, not connecting');
+      return;
+    }
+
     if (this.ws) {
       console.log('Already connected to Gateway');
       return;
@@ -98,10 +123,13 @@ export class DiscordBot {
 
       // Connect to WebSocket
       this.ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
+      
+      // Accept the WebSocket to keep it alive
+      this.state.acceptWebSocket(this.ws);
 
       this.ws.addEventListener('open', () => {
         console.log('WebSocket connection opened');
-        this.reconnectAttempts = 0; // Reset on successful connection
+        this.reconnectAttempts = 0;
         this.isConnecting = false;
       });
 
@@ -112,6 +140,11 @@ export class DiscordBot {
       this.ws.addEventListener('close', (event) => {
         console.log('WebSocket closed:', event.code, event.reason);
         this.cleanup();
+
+        if (!this.botEnabled) {
+          console.log('Bot disabled, not reconnecting');
+          return;
+        }
 
         // Exponential backoff: 5s, 10s, 20s, 40s, 60s (max)
         this.reconnectAttempts++;
@@ -129,6 +162,8 @@ export class DiscordBot {
     } catch (error) {
       console.error('Failed to connect to Gateway:', error);
       this.isConnecting = false;
+
+      if (!this.botEnabled) return;
 
       // Exponential backoff for fetch errors too
       this.reconnectAttempts++;
@@ -255,31 +290,57 @@ export class DiscordBot {
     await this.state.storage.put('messages', this.messageStore);
   }
 
+  async scheduleKeepAlive() {
+    // Set alarm every 30 seconds to keep Durable Object alive
+    const next = new Date(Date.now() + 30000);
+    this.keepAliveAlarm = await this.state.storage.setAlarm(next);
+    console.log('Keep-alive alarm scheduled');
+  }
+
   async scheduleNextSummary() {
     const summaryHour = parseInt(this.env.SUMMARY_TIME_HOUR) || 9;
-
+    
     // Calculate next alarm time (next occurrence of the configured hour)
     const now = new Date();
     const next = new Date();
     next.setUTCHours(summaryHour, 0, 0, 0);
-
+    
     if (next <= now) {
       next.setUTCDate(next.getUTCDate() + 1);
     }
 
     await this.state.storage.setAlarm(next);
     console.log(`Next summary scheduled for ${next.toISOString()}`);
-  }
-
-  async alarm() {
-    console.log('Alarm triggered - sending summary');
-    await this.sendSummary();
-
-    // Schedule next alarm
-    await this.scheduleNextSummary();
-  }
-
-  async sendSummary() {
+  }  async alarm() {
+    console.log('Alarm triggered');
+    
+    // Check if bot is still enabled
+    const enabled = await this.state.storage.get('botEnabled');
+    if (!enabled) {
+      console.log('Bot disabled, not rescheduling');
+      return;
+    }
+    
+    this.botEnabled = enabled;
+    
+    // Keep WebSocket alive
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      console.log('Reconnecting WebSocket from alarm');
+      await this.connectToGateway();
+    }
+    
+    // Check if it's time for summary
+    const summaryHour = parseInt(this.env.SUMMARY_TIME_HOUR) || 9;
+    const now = new Date();
+    
+    if (now.getUTCHours() === summaryHour && now.getUTCMinutes() < 1) {
+      console.log('Sending summary');
+      await this.sendSummary();
+    }
+    
+    // Reschedule keep-alive
+    await this.scheduleKeepAlive();
+  }  async sendSummary() {
     try {
       // Load messages from storage
       this.messageStore = (await this.state.storage.get('messages')) || [];
