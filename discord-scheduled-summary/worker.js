@@ -123,7 +123,7 @@ export class DiscordBot {
 
       // Connect to WebSocket
       this.ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
-      
+
       // Accept the WebSocket to keep it alive
       this.state.acceptWebSocket(this.ws);
 
@@ -299,48 +299,48 @@ export class DiscordBot {
 
   async scheduleNextSummary() {
     const summaryHour = parseInt(this.env.SUMMARY_TIME_HOUR) || 9;
-    
+
     // Calculate next alarm time (next occurrence of the configured hour)
     const now = new Date();
     const next = new Date();
     next.setUTCHours(summaryHour, 0, 0, 0);
-    
+
     if (next <= now) {
       next.setUTCDate(next.getUTCDate() + 1);
     }
 
     await this.state.storage.setAlarm(next);
     console.log(`Next summary scheduled for ${next.toISOString()}`);
-  }  async alarm() {
+  } async alarm() {
     console.log('Alarm triggered');
-    
+
     // Check if bot is still enabled
     const enabled = await this.state.storage.get('botEnabled');
     if (!enabled) {
       console.log('Bot disabled, not rescheduling');
       return;
     }
-    
+
     this.botEnabled = enabled;
-    
+
     // Keep WebSocket alive
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       console.log('Reconnecting WebSocket from alarm');
       await this.connectToGateway();
     }
-    
+
     // Check if it's time for summary
     const summaryHour = parseInt(this.env.SUMMARY_TIME_HOUR) || 9;
     const now = new Date();
-    
+
     if (now.getUTCHours() === summaryHour && now.getUTCMinutes() < 1) {
       console.log('Sending summary');
       await this.sendSummary();
     }
-    
+
     // Reschedule keep-alive
     await this.scheduleKeepAlive();
-  }  async sendSummary() {
+  } async sendSummary() {
     try {
       // Load messages from storage
       this.messageStore = (await this.state.storage.get('messages')) || [];
