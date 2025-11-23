@@ -56,11 +56,15 @@ export class DiscordBot {
 
     if (url.pathname === '/status') {
       const status = {
-        connected: this.ws !== null,
+        connected: this.ws !== null && this.ws.readyState === WebSocket.OPEN,
+        wsReadyState: this.ws ? this.ws.readyState : null,
         sessionId: this.sessionId,
         messagesStored: this.messageStore.length,
+        reconnectAttempts: this.reconnectAttempts,
+        isConnecting: this.isConnecting,
+        hasReconnectScheduled: this.reconnectTimeout !== null,
       };
-      return new Response(JSON.stringify(status), {
+      return new Response(JSON.stringify(status, null, 2), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
