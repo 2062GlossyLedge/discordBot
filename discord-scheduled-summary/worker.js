@@ -41,6 +41,9 @@ export class DiscordBot {
     this.sessionId = null;
     this.sequenceNumber = null;
     this.messageStore = [];
+    this.reconnectAttempts = 0;
+    this.isConnecting = false;
+    this.reconnectTimeout = null;
   }
 
   async fetch(request) {
@@ -71,6 +74,13 @@ export class DiscordBot {
       return;
     }
 
+    if (this.isConnecting) {
+      console.log('Connection attempt already in progress');
+      return;
+    }
+
+    this.isConnecting = true;
+
     try {
       // Get Gateway URL
       const gatewayResponse = await fetch('https://discord.com/api/v10/gateway/bot', {
@@ -87,6 +97,8 @@ export class DiscordBot {
       
       this.ws.addEventListener('open', () => {
         console.log('WebSocket connection opened');
+        this.reconnectAttempts = 0; // Reset on successful connection
+        this.isConnecting = false;
       });
 
       this.ws.addEventListener('message', async (event) => {
@@ -97,16 +109,29 @@ export class DiscordBot {
         console.log('WebSocket closed:', event.code, event.reason);
         this.cleanup();
         
-        // Attempt reconnect after 5 seconds
-        setTimeout(() => this.connectToGateway(), 5000);
+        // Exponential backoff: 5s, 10s, 20s, 40s, 60s (max)
+        this.reconnectAttempts++;
+        const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
+        console.log(`Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})`);
+        
+        this.reconnectTimeout = setTimeout(() => this.connectToGateway(), delay);
       });
 
       this.ws.addEventListener('error', (error) => {
         console.error('WebSocket error:', error);
+        this.isConnecting = false;
       });
 
     } catch (error) {
       console.error('Failed to connect to Gateway:', error);
+      this.isConnecting = false;
+      
+      // Exponential backoff for fetch errors too
+      this.reconnectAttempts++;
+      const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
+      console.log(`Retrying in ${delay / 1000}s (attempt ${this.reconnectAttempts})`);
+      
+      this.reconnectTimeout = setTimeout(() => this.connectToGateway(), delay);
     }
   }
 
@@ -372,6 +397,11 @@ export class DiscordBot {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
     this.ws = null;
+    this.isConnecting = false;
   }
 }
