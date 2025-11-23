@@ -23,3 +23,10 @@ new_sqlite_classes = ["DiscordBot"]
 
 [build]
 command = "echo 'No build step required'"
+
+[observability]
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+invocation_logs = true
+persist = true
