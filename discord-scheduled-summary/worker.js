@@ -71,7 +71,7 @@ export class DiscordBot {
 
     return new Response('Unknown endpoint', { status: 404 });
   }
-
+  //connect on Gateway
   async connectToGateway() {
     if (this.ws) {
       console.log('Already connected to Gateway');
