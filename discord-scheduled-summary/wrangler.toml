@@ -1,0 +1,25 @@
+name = "discord-scheduled-summary"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# Durable Objects bindings
+[[durable_objects.bindings]]
+name = "DISCORD_BOT"
+class_name = "DiscordBot"
+
+# Durable Objects migrations
+[[migrations]]
+tag = "v1"
+new_classes = ["DiscordBot"]
+
+# Environment variables (set via wrangler secret put)
+# DISCORD_TOKEN
+# APP_ID
+# GUILD_ID
+# CHANNEL_ID
+# USER_ID
+# SUMMARY_INTERVAL (in hours)
+# SUMMARY_TIME_HOUR (0-23)
+
+[build]
+command = "echo 'No build step required'"

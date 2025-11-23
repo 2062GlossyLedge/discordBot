@@ -1,0 +1,24 @@
+{
+  "name": "discord-scheduled-summary",
+  "version": "1.0.0",
+  "description": "Discord bot that sends scheduled summaries of guild messages via DM",
+  "main": "bot.js",
+  "type": "module",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["discord", "bot", "scheduled", "summary"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "wrangler": "^3.22.0"
+  }
+}
