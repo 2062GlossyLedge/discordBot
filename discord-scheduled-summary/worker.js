@@ -75,11 +75,11 @@ export class DiscordBot {
       this.botEnabled = true;
       await this.state.storage.put('botEnabled', true);
       await this.connectToGateway();
-      
+
       // Schedule test summary after 30 seconds
       const testAlarm = new Date(Date.now() + 30000);
       await this.state.storage.setAlarm(testAlarm);
-      
+
       return new Response('Test mode started - summary will be sent in 30 seconds', { status: 200 });
     }
 
