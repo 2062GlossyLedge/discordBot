@@ -22,6 +22,10 @@ export default {
       return stub.fetch(request);
     }
 
+    if (url.pathname === '/test') {
+      return stub.fetch(request);
+    }
+
     if (url.pathname === '/stop') {
       return stub.fetch(request);
     }
@@ -30,7 +34,7 @@ export default {
       return stub.fetch(request);
     }
 
-    return new Response('Discord Summary Bot - Endpoints: /start, /stop, /status, /health', {
+    return new Response('Discord Summary Bot - Endpoints: /start, /test, /stop, /status, /health', {
       status: 200,
     });
   },
@@ -50,6 +54,8 @@ export class DiscordBot {
     this.reconnectTimeout = null;
     this.botEnabled = false;
     this.keepAliveAlarm = null;
+    this.testMode = false;
+    this.testSummarySent = false;
   }
 
   async fetch(request) {
@@ -61,6 +67,20 @@ export class DiscordBot {
       await this.connectToGateway();
       await this.scheduleKeepAlive();
       return new Response('Bot started', { status: 200 });
+    }
+
+    if (url.pathname === '/test') {
+      this.testMode = true;
+      this.testSummarySent = false;
+      this.botEnabled = true;
+      await this.state.storage.put('botEnabled', true);
+      await this.connectToGateway();
+      
+      // Schedule test summary after 30 seconds
+      const testAlarm = new Date(Date.now() + 30000);
+      await this.state.storage.setAlarm(testAlarm);
+      
+      return new Response('Test mode started - summary will be sent in 30 seconds', { status: 200 });
     }
 
     if (url.pathname === '/stop') {
@@ -77,6 +97,8 @@ export class DiscordBot {
     if (url.pathname === '/status') {
       const status = {
         enabled: this.botEnabled,
+        testMode: this.testMode,
+        testSummarySent: this.testSummarySent,
         connected: this.ws !== null && this.ws.readyState === WebSocket.OPEN,
         wsReadyState: this.ws ? this.ws.readyState : null,
         sessionId: this.sessionId,
@@ -134,6 +156,7 @@ export class DiscordBot {
       });
 
       this.ws.addEventListener('message', async (event) => {
+        console.log('WebSocket message received:', event.data);
         await this.handleGatewayMessage(JSON.parse(event.data));
       });
 
