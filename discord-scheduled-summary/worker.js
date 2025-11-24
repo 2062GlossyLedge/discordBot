@@ -175,8 +175,14 @@ export class DiscordBot {
           this.heartbeatInterval = null;
         }
 
-        if (!this.botEnabled || this.testMode) {
-          console.log('Bot disabled or in test mode, not reconnecting');
+        if (!this.botEnabled) {
+          console.log('Bot disabled, not reconnecting');
+          return;
+        }
+
+        // In test mode, we still want to maintain connection until test completes
+        if (this.testMode && this.testSummarySent) {
+          console.log('Test already complete, not reconnecting');
           return;
         }
 
