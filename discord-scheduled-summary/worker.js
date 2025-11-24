@@ -153,12 +153,8 @@ export class DiscordBot {
       const gatewayData = await gatewayResponse.json();
       const gatewayUrl = gatewayData.url;
 
-      // Connect to WebSocket
-      const ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
-
-      // Accept the WebSocket to keep it alive
-      this.state.acceptWebSocket(ws);
-      this.ws = ws;
+      // Connect to WebSocket (outbound connection - don't use acceptWebSocket)
+      this.ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
 
       this.ws.addEventListener('open', () => {
         console.log('WebSocket connection opened');
