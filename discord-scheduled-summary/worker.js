@@ -120,7 +120,7 @@ export class DiscordBot {
       return;
     }
 
-    if (this.ws) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       console.log('Already connected to Gateway');
       return;
     }
@@ -128,6 +128,16 @@ export class DiscordBot {
     if (this.isConnecting) {
       console.log('Connection attempt already in progress');
       return;
+    }
+
+    // Clear any stale WebSocket reference
+    if (this.ws) {
+      try {
+        this.ws.close();
+      } catch (e) {
+        // Ignore errors when closing stale connection
+      }
+      this.ws = null;
     }
 
     this.isConnecting = true;
@@ -144,10 +154,11 @@ export class DiscordBot {
       const gatewayUrl = gatewayData.url;
 
       // Connect to WebSocket
-      this.ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
+      const ws = new WebSocket(`${gatewayUrl}/?v=10&encoding=json`);
 
       // Accept the WebSocket to keep it alive
-      this.state.acceptWebSocket(this.ws);
+      this.state.acceptWebSocket(ws);
+      this.ws = ws;
 
       this.ws.addEventListener('open', () => {
         console.log('WebSocket connection opened');
@@ -156,25 +167,25 @@ export class DiscordBot {
       });
 
       this.ws.addEventListener('message', async (event) => {
-        console.log('WebSocket message received:', event.data);
         await this.handleGatewayMessage(JSON.parse(event.data));
       });
 
       this.ws.addEventListener('close', (event) => {
         console.log('WebSocket closed:', event.code, event.reason);
-        this.cleanup();
+        this.ws = null;
 
-        if (!this.botEnabled) {
-          console.log('Bot disabled, not reconnecting');
+        if (this.heartbeatInterval) {
+          clearInterval(this.heartbeatInterval);
+          this.heartbeatInterval = null;
+        }
+
+        if (!this.botEnabled || this.testMode) {
+          console.log('Bot disabled or in test mode, not reconnecting');
           return;
         }
 
-        // Exponential backoff: 5s, 10s, 20s, 40s, 60s (max)
-        this.reconnectAttempts++;
-        const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
-        console.log(`Reconnecting in ${delay / 1000}s (attempt ${this.reconnectAttempts})`);
-
-        this.reconnectTimeout = setTimeout(() => this.connectToGateway(), delay);
+        // Let the keep-alive alarm handle reconnection instead of immediate retry
+        console.log('Will reconnect on next keep-alive alarm');
       });
 
       this.ws.addEventListener('error', (error) => {
@@ -185,15 +196,7 @@ export class DiscordBot {
     } catch (error) {
       console.error('Failed to connect to Gateway:', error);
       this.isConnecting = false;
-
-      if (!this.botEnabled) return;
-
-      // Exponential backoff for fetch errors too
-      this.reconnectAttempts++;
-      const delay = Math.min(5000 * Math.pow(2, this.reconnectAttempts - 1), 60000);
-      console.log(`Retrying in ${delay / 1000}s (attempt ${this.reconnectAttempts})`);
-
-      this.reconnectTimeout = setTimeout(() => this.connectToGateway(), delay);
+      this.ws = null;
     }
   }
 
@@ -334,8 +337,22 @@ export class DiscordBot {
 
     await this.state.storage.setAlarm(next);
     console.log(`Next summary scheduled for ${next.toISOString()}`);
-  } async alarm() {
+  }
+
+  async alarm() {
     console.log('Alarm triggered');
+
+    // Check if this is test mode alarm
+    if (this.testMode && !this.testSummarySent) {
+      console.log('Test mode: Sending summary');
+      await this.sendSummary();
+      this.testSummarySent = true;
+      this.testMode = false;
+      this.botEnabled = false;
+      await this.state.storage.put('botEnabled', false);
+      console.log('Test mode complete - bot disabled');
+      return; // Don't reschedule
+    }
 
     // Check if bot is still enabled
     const enabled = await this.state.storage.get('botEnabled');
