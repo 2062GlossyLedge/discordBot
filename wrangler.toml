@@ -1,16 +1,10 @@
 name = "scheduled-summary"
-main = "discord-scheduled-summary/worker.js"
+main = "discord-scheduled-summary/worker-polling.js"
 compatibility_date = "2024-11-23"
 
-# Durable Objects bindings
-[[durable_objects.bindings]]
-name = "DISCORD_BOT"
-class_name = "DiscordBot"
-
-# Durable Objects migrations
-[[migrations]]
-tag = "v1"
-new_sqlite_classes = ["DiscordBot"]
+# Cron trigger: midnight UTC = 5pm MST daily
+[triggers]
+crons = ["0 0 * * *"]
 
 # Environment variables (set via wrangler secret put)
 # DISCORD_TOKEN
