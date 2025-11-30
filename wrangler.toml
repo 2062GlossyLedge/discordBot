@@ -11,6 +11,11 @@ crons = ["0 0 * * *"]
 tag = "v2"
 deleted_classes = ["DiscordBot"]
 
+# KV namespace for bot state (enabled/disabled)
+[[kv_namespaces]]
+binding = "BOT_STATE"
+id = "fcc5380a9e5443a4b4398aa77911a8cd"
+
 # Environment variables (set via wrangler secret put)
 # DISCORD_TOKEN
 # APP_ID

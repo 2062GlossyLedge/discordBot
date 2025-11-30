@@ -6,9 +6,11 @@
  * 
  * Runs daily at 5pm MST (midnight UTC) via cron trigger.
  * Use /test endpoint to trigger immediately for testing.
+ * Use /stop to disable and /start to enable the scheduled summary.
  */
 
 const DISCORD_API = 'https://discord.com/api/v10';
+const BOT_ENABLED_KEY = 'bot_enabled';
 
 export default {
     /**
@@ -22,7 +24,45 @@ export default {
             return new Response('OK', { status: 200 });
         }
 
-        // Test endpoint - triggers summary immediately
+        // Status endpoint - check if bot is enabled
+        if (url.pathname === '/status') {
+            const enabled = await isBotEnabled(env);
+            return new Response(JSON.stringify({
+                enabled,
+                message: enabled ? 'Bot is enabled and will send scheduled summaries' : 'Bot is disabled',
+            }, null, 2), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Stop endpoint - disable scheduled summaries
+        if (url.pathname === '/stop') {
+            await env.BOT_STATE.put(BOT_ENABLED_KEY, 'false');
+            return new Response(JSON.stringify({
+                success: true,
+                enabled: false,
+                message: 'Bot disabled. Scheduled summaries will not run until /start is called.',
+            }, null, 2), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Start endpoint - enable scheduled summaries
+        if (url.pathname === '/start') {
+            await env.BOT_STATE.put(BOT_ENABLED_KEY, 'true');
+            return new Response(JSON.stringify({
+                success: true,
+                enabled: true,
+                message: 'Bot enabled. Scheduled summaries will run at 5pm MST daily.',
+            }, null, 2), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Test endpoint - triggers summary immediately (bypasses enabled check)
         if (url.pathname === '/test') {
             try {
                 const result = await generateAndSendSummary(env);
@@ -42,7 +82,7 @@ export default {
         }
 
         return new Response(
-            'Discord Summary Bot (Polling)\n\nEndpoints:\n  /health - Health check\n  /test - Trigger summary immediately',
+            'Discord Summary Bot (Polling)\n\nEndpoints:\n  /health - Health check\n  /status - Check if bot is enabled\n  /start - Enable scheduled summaries\n  /stop - Disable scheduled summaries\n  /test - Trigger summary immediately (ignores enabled state)',
             { status: 200, headers: { 'Content-Type': 'text/plain' } }
         );
     },
@@ -53,6 +93,13 @@ export default {
     async scheduled(event, env, ctx) {
         console.log('⏰ Cron triggered at:', new Date().toISOString());
 
+        // Check if bot is enabled
+        const enabled = await isBotEnabled(env);
+        if (!enabled) {
+            console.log('⏸️ Bot is disabled, skipping summary');
+            return;
+        }
+
         try {
             const result = await generateAndSendSummary(env);
             console.log('✅ Summary sent successfully:', result);
@@ -62,6 +109,15 @@ export default {
         }
     },
 };
+
+/**
+ * Check if the bot is enabled (defaults to true if not set)
+ */
+async function isBotEnabled(env) {
+    const value = await env.BOT_STATE.get(BOT_ENABLED_KEY);
+    // Default to enabled if not set
+    return value !== 'false';
+}
 
 /**
  * Main function: Fetch messages, generate summary, send DM
