@@ -65,7 +65,7 @@ export default {
         // Test endpoint - triggers summary immediately (bypasses enabled check)
         if (url.pathname === '/test') {
             try {
-                const result = await generateAndSendSummary(env);
+                const result = await testWithLongMessages(env);
                 return new Response(JSON.stringify(result, null, 2), {
                     status: 200,
                     headers: { 'Content-Type': 'application/json' },
@@ -117,6 +117,54 @@ async function isBotEnabled(env) {
     const value = await env.BOT_STATE.get(BOT_ENABLED_KEY);
     // Default to enabled if not set
     return value !== 'false';
+}
+
+/**
+ * Test function with long messages to exceed Discord's 2000 character limit
+ */
+async function testWithLongMessages(env) {
+    const { USER_ID, DISCORD_TOKEN } = env;
+
+    // Create mock messages with long content to test splitting
+    const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(50); // ~2800 chars
+    
+    const mockMessages = [
+        {
+            id: '1',
+            content: longText,
+            author: { username: 'User1', bot: false },
+            timestamp: new Date(Date.now() - 3600000).toISOString(),
+        },
+        {
+            id: '2',
+            content: 'Another message with ' + longText.substring(0, 500),
+            author: { username: 'User2', bot: false },
+            timestamp: new Date(Date.now() - 1800000).toISOString(),
+        },
+        {
+            id: '3',
+            content: 'Short message',
+            author: { username: 'User3', bot: false },
+            timestamp: new Date(Date.now() - 900000).toISOString(),
+        },
+    ];
+
+    // Format the summary with long content
+    const summary = formatSummary(mockMessages, 24);
+
+    console.log(`📊 Test summary length: ${summary.length} characters`);
+    console.log(`📧 Sending test summary to user ${USER_ID}...`);
+
+    // Send the test summary via DM
+    await sendDirectMessage(DISCORD_TOKEN, USER_ID, summary);
+
+    return {
+        success: true,
+        messagesGenerated: mockMessages.length,
+        summaryLength: summary.length,
+        timestamp: new Date().toISOString(),
+        note: 'Test with long messages to verify message splitting',
+    };
 }
 
 /**
@@ -205,13 +253,8 @@ function formatSummary(messages, intervalHours) {
             timeZone: 'America/Denver', // MST
         });
 
-        // Truncate long messages
-        const content = msg.content.length > 100
-            ? msg.content.substring(0, 100) + '...'
-            : msg.content;
-
         // Handle empty content (embeds, attachments only)
-        const displayContent = content || '[attachment/embed]';
+        const displayContent = msg.content || '[attachment/embed]';
 
         summary += `• **${msg.author.username}** (${time}): ${displayContent}\n`;
     }
@@ -239,11 +282,13 @@ function splitMessage(content, maxLength = 2000) {
             ? line.substring(0, maxLength - 3) + '...'
             : line;
 
+        // append next text to chunk until it reached limit. adds digestable chunks to array, 
         if ((currentChunk + '\n' + safeLine).length > maxLength) {
             if (currentChunk) {
                 chunks.push(currentChunk.trim());
             }
             currentChunk = safeLine;
+            //handle empty currentChunk
         } else {
             currentChunk += (currentChunk ? '\n' : '') + safeLine;
         }
