@@ -127,7 +127,7 @@ async function testWithLongMessages(env) {
 
     // Create mock messages with long content to test splitting
     const longText = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit. '.repeat(50); // ~2800 chars
-    
+
     const mockMessages = [
         {
             id: '1',
